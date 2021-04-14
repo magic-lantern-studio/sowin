@@ -8,7 +8,7 @@ set(EVENT MSG*)
 
 set(SO${GUI}_MAJOR_VERSION 1)
 set(SO${GUI}_MINOR_VERSION 6)
-set(SO${GUI}_MICRO_VERSION 0)
+set(SO${GUI}_MICRO_VERSION 1)
 set(SO${GUI}_BETA_VERSION)
 set(SO${GUI}_VERSION ${SO${GUI}_MAJOR_VERSION}.${SO${GUI}_MINOR_VERSION}.${SO${GUI}_MICRO_VERSION}${SO${GUI}_BETA_VERSION})
 
@@ -23,6 +23,11 @@ set(PROJECT_DESCRIPTION   "SoWin is a Windows GUI component toolkit library for 
 string(TIMESTAMP SO${GUI}_BUILD_YEAR "%Y")
 math(EXPR SO${GUI}_SO_VERSION ${PROJECT_VERSION_MAJOR}*20)
 set(VERSION ${SO${GUI}_VERSION})
+
+if(POLICY CMP0054)
+  # CMake version 3.14.5 warns when the policy is not set and uses OLD behaviour
+  cmake_policy(SET CMP0054 NEW)
+endif()
 
 if(POLICY CMP0072)
   # get rid of OpenGL GLVND warning from CMake 3.11
@@ -64,12 +69,13 @@ option(COIN_IV_EXTENSIONS "Enable extra Open Inventor extensions" ON)
 option(SO${GUI}_BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(WITH_STATIC_DEFAULTS "Enable statically linked in default materials" ON)
 option(HAVE_SPACENAV_SUPPORT "Enable Space Navigator support" ON)
+option(SO${GUI}_USE_CPACK "If enabled the cpack subrepo is mandatory" OFF)
 option(SO${GUI}_BUILD_DOCUMENTATION "Build and install API documentation (requires Doxygen)." OFF)
+option(SO${GUI}_BUILD_TESTS "Build small test programs." ON)
 cmake_dependent_option(SO${GUI}_BUILD_INTERNAL_DOCUMENTATION "Document internal code not part of the API." OFF "SO${GUI}_BUILD_DOCUMENTATION" OFF)
 cmake_dependent_option(SO${GUI}_BUILD_DOC_MAN "Build So${Gui} man pages." OFF "SO${GUI}_BUILD_DOCUMENTATION" OFF)
 cmake_dependent_option(SO${GUI}_BUILD_DOC_QTHELP "Build QtHelp documentation." OFF "SO${GUI}_BUILD_DOCUMENTATION" OFF)
 cmake_dependent_option(SO${GUI}_BUILD_DOC_CHM "Build compressed HTML help manual (requires HTML help compiler)" OFF "SO${GUI}_BUILD_DOCUMENTATION" OFF)
-option(SO${GUI}_USE_CPACK "If enabled the cpack subrepo is mandatory" OFF)
 
 # ############################################################################
 # Find all necessary and optional SoWin dependencies
@@ -79,6 +85,8 @@ option(SO${GUI}_USE_CPACK "If enabled the cpack subrepo is mandatory" OFF)
 
 find_package(OpenGL REQUIRED)
 find_package(Coin REQUIRED)
+
+set(PKG_CONFIG_REQUIRES "Coin")
 
 # ##########################################################################
 # Setup build environment
@@ -101,7 +109,41 @@ foreach (_config ${CMAKE_CONFIGURATION_TYPES})
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${_config} "${CMAKE_BINARY_DIR}/bin")
 endforeach()
 
+if(MSVC)
+  if (MSVC_VERSION GREATER 1500 OR MSVC_VERSION EQUAL 1500)
+    option(SO${GUI}_BUILD_MSVC_MP "Enable build with multiple processes in Visual Studio" ON)
+  else()
+    set(SO${GUI}_BUILD_MSVC_MP OFF CACHE BOOL "Compiler option /MP requires at least Visual Studio 2008 (VS9) or newer" FORCE)
+  endif()
+  if(SO${GUI}_BUILD_MSVC_MP)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
+  endif ()
+  option(SO${GUI}_BUILD_MSVC_STATIC_RUNTIME "Build against static Microsoft Visual C runtime library." OFF)
+  # will be later refactored to common function/macro
+  #coin_msvc_link_type_crt(${SO${GUI}_BUILD_MSVC_STATIC_RUNTIME})
+  set(_vars         CMAKE_C_FLAGS CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE CMAKE_C_FLAGS_MINSIZEREL CMAKE_C_FLAGS_RELWITHDEBINFO)
+  set(_vars ${_vars} CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE CMAKE_CXX_FLAGS_MINSIZEREL CMAKE_CXX_FLAGS_RELWITHDEBINFO)
+  if(${SO${GUI}_BUILD_MSVC_STATIC_RUNTIME})
+    message(STATUS "Build against static Microsoft Visual C runtime library")
+    foreach(_flags ${_vars})
+      if(${_flags} MATCHES "/MD")
+        string(REGEX REPLACE "/MD" "/MT" ${_flags} "${${_flags}}")
+      endif()
+    endforeach()
+    set(PKG_CONFIG_MSVC_LIBC "multithread-static")
+  else()
+    message(STATUS "Build against dynamic Microsoft Visual C runtime library")
+    foreach(_flags ${_vars})
+      if(${_flags} MATCHES "/MT")
+        string(REGEX REPLACE "/MT" "/MD" ${_flags} "${${_flags}}")
+      endif()
+    endforeach()
+    set(PKG_CONFIG_MSVC_LIBC "multithread-dynamic")
+  endif()
+endif()
+
 if(WIN32)
+  add_compile_definitions(WINVER=0x0501 _WIN32_WINNT=0x0501)
   if(MINGW)
     set(SO${GUI}_DEFAULT_SHARED_POSTFIX "")
     set(SO${GUI}_DEFAULT_STATIC_POSTFIX "")
@@ -112,8 +154,10 @@ if(WIN32)
   endif()
   if(SO${GUI}_BUILD_SHARED_LIBS)
     set(SO${GUI}_DEFAULT_POSTFIX ${SO${GUI}_DEFAULT_SHARED_POSTFIX})
+    set(PKG_CONFIG_CPPFLAGS "${PKG_CONFIG_CPPFLAGS} -DSOWIN_DLL")
   else()
     set(SO${GUI}_DEFAULT_POSTFIX ${SO${GUI}_DEFAULT_STATIC_POSTFIX})
+    set(PKG_CONFIG_CPPFLAGS "${PKG_CONFIG_CPPFLAGS} -DSOWIN_NOT_DLL")
   endif()
   set(CMAKE_RELEASE_POSTFIX ${SO${GUI}_DEFAULT_POSTFIX})
   set(CMAKE_MINSIZEREL_POSTFIX ${SO${GUI}_DEFAULT_POSTFIX})
@@ -123,6 +167,7 @@ elseif(APPLE)
 else()
   set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
+list(APPEND LIB_DEPENDENCIES "-l${PROJECT_NAME}")
 
 set(GUI_TOOLKIT_VERSION "GetOSDisplayString()")
 check_symbol_exists(__func__ "" FUNC)
@@ -271,7 +316,7 @@ set(PACKAGE_URL "https://github.com/coin3d/${PROJECT_NAME_LOWER}")
 set(PACKAGE_VERSION ${PROJECT_VERSION})
 set(PACKAGE_HOST ${CMAKE_HOST_SYSTEM_PROCESSOR}-${CMAKE_HOST_SYSTEM_NAME})
 set(PACKAGE_COMPILER ${CMAKE_CXX_COMPILER})
-set(PACKAGE_REQUIREMENTS "Coin")
+set(PACKAGE_REQUIREMENTS "${PKG_CONFIG_REQUIRES}")
 
 # ############################################################################
 # Setup targets in subdirectories
@@ -280,7 +325,9 @@ set(PACKAGE_REQUIREMENTS "Coin")
 add_subdirectory(data)
 add_subdirectory(src)
 ##### small test programs (to be run interactively)
-add_subdirectory(test-code)
+if (SO${GUI}_BUILD_TESTS)
+  add_subdirectory(test-code)
+endif()
 
 ############################################################################
 # New CPACK section, please see the README file inside cpack.d directory.
