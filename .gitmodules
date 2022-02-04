@@ -9,4 +9,4 @@
 	url = https://github.com/coin3d/generalmsvcgeneration
 [submodule "src/Inventor/Win/common"]
 	path = src/Inventor/Win/common
-	url = https://github.com/magic-lantern-sudio/sogui
+	url = https://github.com/magic-lantern-studio/sogui
