@@ -558,6 +558,16 @@ SoWin::getShellWidget(HWND hwnd)
 }
 
 /*!
+  Check for Inventor sensors scheduled for execution when the
+  system is idle.
+*/
+int
+SoWin::haveIdleTasks(void)
+{
+  return (SoWinP::idleSensorId != 0);   
+}
+
+/*!
   Process all Inventor sensors scheduled for execution when the
   system is idle.
 */
