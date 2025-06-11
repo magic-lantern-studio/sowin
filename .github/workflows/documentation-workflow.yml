@@ -1,13 +1,11 @@
-name: Continuous Integration Build
+name: Awesome Documentation Build
 
 on:
-  pull_request:
+  workflow_dispatch:  # Allow manual triggers
+  push:
     branches: [ master ]
-#  push:
-#    branches: [ master ]
 
 jobs:
-
   windows-build:
     name: Windows Build
     runs-on: windows-latest
@@ -27,16 +25,18 @@ jobs:
           echo download file %DOWNLOAD_FILE_COIN% from address %DOWNLOAD_ADDRESS_COIN%
           curl -s -S -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/octet-stream" -o %DOWNLOAD_FILE_COIN% %DOWNLOAD_ADDRESS_COIN%
           7z x %DOWNLOAD_FILE_COIN% -ocmake_download_dir
-          cmake -S . -B cmake_build_dir -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=cmake_install_dir -DCMAKE_PREFIX_PATH=cmake_download_dir/Coin3D
+          curl -L -o doxygen-1.10.0.windows.x64.bin.zip https://github.com/doxygen/doxygen/releases/download/Release_1_10_0/doxygen-1.10.0.windows.x64.bin.zip
+          7z x doxygen-1.10.0.windows.x64.bin.zip -odoxygen-1.10.0
+          set PATH=${{ github.workspace }}/doxygen-1.10.0;%PATH%
+          cmake -S . -B cmake_build_dir -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=cmake_install_dir -DCMAKE_PREFIX_PATH=cmake_download_dir/Coin3D -DSOWIN_BUILD_AWESOME_DOCUMENTATION=ON
       - name: Build project
+        shell: cmd
         run: |
-          cmake --build cmake_build_dir --target INSTALL --config Release -- /nologo /verbosity:minimal /maxcpucount:2 /property:MultiProcessorCompilation=true
-      #- name: Run tests
-      #  run:  ctest -C Release -VV
-      #  working-directory: cmake_build_dir
-      - name: Create Artifacts
-        uses: actions/upload-artifact@v4
+          set PATH=${{ github.workspace }}/doxygen-1.10.0;%PATH%
+          doxygen.exe --version
+          cmake --build cmake_build_dir --target documentation_awesome --config Release
+      - name: Deploy Awesome Documentation to Github Pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          name: Windows-Artifacts
-          path: cmake_install_dir/
-        if: always()
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: cmake_build_dir/html_awesome

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.0...3.29)
 
 set(gui win)
 set(Gui Win)
@@ -8,7 +8,7 @@ set(EVENT MSG*)
 
 set(SO${GUI}_MAJOR_VERSION 1)
 set(SO${GUI}_MINOR_VERSION 6)
-set(SO${GUI}_MICRO_VERSION 1)
+set(SO${GUI}_MICRO_VERSION 2)
 set(SO${GUI}_BETA_VERSION)
 set(SO${GUI}_VERSION ${SO${GUI}_MAJOR_VERSION}.${SO${GUI}_MINOR_VERSION}.${SO${GUI}_MICRO_VERSION}${SO${GUI}_BETA_VERSION})
 
@@ -71,6 +71,7 @@ option(WITH_STATIC_DEFAULTS "Enable statically linked in default materials" ON)
 option(HAVE_SPACENAV_SUPPORT "Enable Space Navigator support" ON)
 option(SO${GUI}_USE_CPACK "If enabled the cpack subrepo is mandatory" OFF)
 option(SO${GUI}_BUILD_DOCUMENTATION "Build and install API documentation (requires Doxygen)." OFF)
+option(SO${GUI}_BUILD_AWESOME_DOCUMENTATION "Build and install API documentation in new modern style (requires Doxygen)." OFF)
 option(SO${GUI}_BUILD_TESTS "Build small test programs." ON)
 cmake_dependent_option(SO${GUI}_BUILD_INTERNAL_DOCUMENTATION "Document internal code not part of the API." OFF "SO${GUI}_BUILD_DOCUMENTATION" OFF)
 cmake_dependent_option(SO${GUI}_BUILD_DOC_MAN "Build So${Gui} man pages." OFF "SO${GUI}_BUILD_DOCUMENTATION" OFF)
@@ -268,6 +269,15 @@ check_cxx_source_compiles("
   #include <Inventor/VRMLnodes/SoVRMLViewpoint.h>
   int main() { SoVRMLViewpoint * p = new SoVRMLViewpoint; return 0; }
 " HAVE_SOVRMLVIEWPOINT)
+check_cxx_source_compiles("
+  #include <Inventor/SbColorRGBA.h>
+  int main() { SbColorRGBA c; return 0; }
+" HAVE_SBCOLORRGBA_H)
+check_cxx_source_compiles("
+  #include <Inventor/SbColorRGBA.h>
+  #include <Inventor/SoSceneManager.h>
+  int main() { SoSceneManager * p = new SoSceneManager; SbColorRGBA c = p->getBackgroundColorRGBA(); return 0; }
+" HAVE_SOSCENEMANAGER_GETBACKGROUNDCOLORRGBA)
 
 unset(CMAKE_REQUIRED_LIBRARIES)
 
